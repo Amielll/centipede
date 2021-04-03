@@ -14,12 +14,13 @@
 
 
 .data
-	displayAddress: 	.word 0x10008000
-	playerLoc: 			.word 814
+
+	# Player / Centipede data
 	
 	# Conventions:
 	# centLoc[9] = centipede head
 	# centDir: 1 = right		0 = dead		-1 = left
+	playerLoc: 			.word 814
 	centLoc: 			.word 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 
 	centDir:			.word 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
 	
@@ -28,6 +29,10 @@
 	centColour:			.word 0xff0000		# red
 	bgColour:			.word 0x000000		# black
 	mushroomColour:		.word 0x964000		# brown
+	
+	# Screen
+	displayAddress: 	.word 0x10008000
+	screenWidth:		.word 32
 	
 .text
 
@@ -61,29 +66,55 @@ update_cent:
 	addi $a3, $zero, 10 # Loop count (10 cells)
 	la $a1, centLoc
 	la $a2, centDir
-	lw $s0, 0($a1)
+	lw $s0, 0($a1)		# Tail of centipede
 	
 	cent_loop:
-		lw $t2, displayAddress
 		lw $t1, 0($a1)				# current centipede cell's location
-		lw $t5, 0($a2)				# current centipede cell's direction
+		lw $t2, displayAddress
 		lw $t3, centColour
+		lw $t5, 0($a2)				# current centipede cell's direction
 	
 		sll $t4, $t1, 2 			# t4 is(cell's location * 4) to account for bias
 		add $t4, $t2, $t4			# location relative to origin
 	
 		sw $t3, 0($t4)				# Draws red at initial location
-	
-		add $t1, $t1, $t5			# cell's next location
-		sw $t1, 0($a1)				# save this location
-	
+		
+		
+		# Handle "wriggle"
+		lw $t6, screenWidth
+		div $t1, $t6
+		mfhi $t3					# Store cell's location mod 32
+		addi $t6, $t6, -1
+		
+		seq $t7, $t5, 1	
+		seq $t8, $t3, $t6
+		and $s1, $t7, $t8			# Cell is at right border and cannot move further in its direction
+		
+		seq $t7, $t5, -1
+		seq $t8, $t3, $zero
+		and $s2, $t7, $t8			# Cell is at left border and cannot move further in its direction
+		
+		
+		add $t1, $t1, $t5			# Pre-wriggle location
+		or $s3, $s1, $s2
+		beq $s3, $zero, cont		# No wriggle required, continue
+		
+		
+		sub $t1, $t1, $t5			# Have to wriggle, undo pre-wriggle movement			
+		addi $t6, $t6, 1
+		add $t1, $t1, $t6			# Cell moves 1 row down
+		mul $t5, $t5, -1			# Flip the cell's direction
+		
+	cont:
+		sw $t1, 0($a1)				# save location
+		sw $t5, 0($a2)				# save direction
 	
 		addi $a1, $a1, 4 			# Point to next element in array (the next cell)
 		addi $a2, $a2, 4
 		addi $a3, $a3, -1			# Decrement loop counter
 		bne $a3, $zero, cent_loop	
 	
-	# Erasing centipede's previous location
+	# Erasing behind centipede tail
 	lw $t7, bgColour
 	sll $t4, $s0, 2
 	add $t4, $t2, $t4
@@ -180,7 +211,7 @@ handle_s:
 delay:
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
-	li $a1, 10000
+	li $a1, 100000
 	
 	delay_loop:
 		addi $a1, $a1, -1

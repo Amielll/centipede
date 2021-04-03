@@ -237,17 +237,6 @@ handle_x:
 handle_s:
 	b update_player
 
-
-		lw $t1, 0($a1)				# current centipede cell's location
-		lw $t2, displayAddress
-		lw $t3, centColour
-		lw $t5, 0($a2)				# current centipede cell's direction
-	
-		sll $t4, $t1, 2 			# t4 is(cell's location * 4) to account for bias
-		add $t4, $t2, $t4			# location relative to origin
-	
-		sw $t3, 0($t4)				# Draws red at initial location
-
 update_dart:
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)

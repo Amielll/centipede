@@ -16,17 +16,18 @@
 .data
 
 	# Player / Centipede data
-	
 	# Conventions:
 	# centLoc[9] = centipede head
 	# centDir: 1 = right		0 = dead		-1 = left
 	playerLoc: 			.word 814
 	centLoc: 			.word 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 
 	centDir:			.word 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
-	
+	dartSpawned:		.word 0
+	dartLoc:			.word 0
 	
 	# Colours
 	centColour:			.word 0xff0000		# red
+	dartColour:			.word 0xdefffb		# light blue
 	bgColour:			.word 0x000000		# black
 	mushroomColour:		.word 0x964000		# brown
 	
@@ -47,10 +48,14 @@ init_game:
 	sll $t4, $t1, 2		# For offset
 	add $t4, $t2, $t4
 	sw $t3, 0($t4)		# Draw pixel (white)
+	
+	li $a1, 31
+	li $a2, 32
 
 # Game loop
 main:
 	jal update_cent
+	jal update_dart
 	jal check_keystroke
 	jal delay
 	j main
@@ -146,7 +151,7 @@ get_key:		# Determine which key was pressed
 	addi $v0, $zero, 0 		# Default case
 	beq $t2, 0x6A, handle_j
 	beq $t2, 0x6B, handle_k
-	beq $t2, 0x7B, handle_x
+	beq $t2, 0x78, handle_x
 	beq $t2, 0x73, handle_s
 	
 	lw $ra, 0($sp)
@@ -203,15 +208,90 @@ handle_k:
 	b update_player
 	
 handle_x:
-	b update_player
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	lw $t5, dartSpawned		# Player can only shoot once old dart expires
+	bne $t5, $zero, fin 
+	
+	
+	addi $t5, $t5, 1
+	sw $t5, dartSpawned		# Spawned dart
+	
+	lw $t1, playerLoc
+	lw $t2, displayAddress
+	lw $t3, dartColour
+	
+	addi $t1, $t1, -32  # Draw dart one pixel above player
+	sll $t4, $t1, 2		# For offset
+	add $t4, $t2, $t4
+	sw $t3, 0($t4)		# Draw pixel
+	sw $t1, dartLoc		# Save dart location
+	
+	fin:
+		lw $ra, 0($sp)
+		addi $sp, $sp, 4
+		jr $ra
+		
 	
 handle_s:
 	b update_player
 
+
+		lw $t1, 0($a1)				# current centipede cell's location
+		lw $t2, displayAddress
+		lw $t3, centColour
+		lw $t5, 0($a2)				# current centipede cell's direction
+	
+		sll $t4, $t1, 2 			# t4 is(cell's location * 4) to account for bias
+		add $t4, $t2, $t4			# location relative to origin
+	
+		sw $t3, 0($t4)				# Draws red at initial location
+
+update_dart:
+	addi $sp, $sp, -4
+	sw $ra, 0($sp)
+	
+	lw $t1, dartSpawned
+	beq $t1, $zero, no_dart		# No dart to update
+	
+	lw $t2, displayAddress
+	lw $t3, dartLoc
+	lw $t5, dartColour
+	lw $t6, bgColour
+	
+	# Erase behind dart
+	sll $t4, $t3, 2
+	add $t4, $t2, $t4
+	sw $t6, 0($t4)
+	
+	
+	addi $t3, $t3, -32 # New position (1 pixel higher)
+	bltz $t3, remove_bullet
+	sw $t3, dartLoc
+	sll $t4, $t3, 2
+	add $t4, $t2, $t4
+	sw $t5, 0($t4)
+	
+	
+	no_dart:
+		lw $ra, 0($sp)
+		addi $sp, $sp, 4
+		jr $ra
+	
+	
+	remove_bullet:
+		li $t3, 0
+		sw $t3, dartLoc
+		addi $t1, $t1, -1
+		sw $t1, dartSpawned
+		b no_dart
+
+
 delay:
 	addi $sp, $sp, -4
 	sw $ra, 0($sp)
-	li $a1, 100000
+	li $a1, 10000
 	
 	delay_loop:
 		addi $a1, $a1, -1
